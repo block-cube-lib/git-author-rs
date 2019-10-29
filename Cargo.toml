@@ -1,0 +1,12 @@
+[package]
+name = "git-author"
+version = "1.0.0"
+authors = ["block <block.cube.lib@gmail.com>"]
+edition = "2018"
+description = "Get and set repository or global author"
+
+[dependencies]
+addr = "0.2.0"
+derive-error = "0.0.4"
+regex = "1"
+clap = "2.33.0"
