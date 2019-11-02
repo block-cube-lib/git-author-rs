@@ -1,6 +1,9 @@
-#[derive(Debug, Clone, Copy)]
+/// Config file location
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigFileLocation {
+    /// use global config file
     Global,
+    /// use repository config file
     Local,
 }
 
@@ -16,10 +19,6 @@ impl std::fmt::Display for ConfigFileLocation {
 
 impl ConfigFileLocation {
     pub fn to_arg(self) -> String {
-        use ConfigFileLocation::*;
-        match &self {
-            Global => "--global".to_string(),
-            Local => "--local".to_string(),
-        }
+        format!("--{}", self)
     }
 }

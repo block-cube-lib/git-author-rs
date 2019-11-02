@@ -1,12 +1,12 @@
 #[derive(Clone, Copy)]
-pub enum User {
+pub enum UserParameter {
     Name,
     Email,
 }
 
-impl User {
+impl UserParameter {
     pub fn to_arg(self) -> String {
-        use User::*;
+        use UserParameter::*;
         match &self {
             Name => "user.name".to_string(),
             Email => "user.email".to_string(),

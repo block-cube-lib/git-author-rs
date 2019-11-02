@@ -1,72 +1,51 @@
 use crate::error::Error;
-use regex::Regex;
-use std::str::FromStr;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Name(pub String);
-
-impl FromStr for Name {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let name = s.trim();
-        if !name.is_empty() {
-            Ok(Name(name.into()))
-        } else {
-            Err(Error::ParseError)
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Email(pub String);
-
-impl FromStr for Email {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let email: addr::Email = s.parse()?;
-        let email = Email(format!("{}", email));
-        Ok(email)
-    }
-}
+use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Author {
-    name: Name,
-    email: Email,
+    name: Option<String>,
+    email: Option<String>,
 }
 
 impl Author {
-    pub fn name(&self) -> &Name {
+    pub fn new<S1, S2>(name: Option<S1>, email: Option<S2>) -> Result<Self, Error>
+    where
+        S1: AsRef<str>,
+        S2: AsRef<str>,
+    {
+        let v = name.map(|s| s.as_ref().trim().to_string());
+        let name = match &v {
+            Some(s) if s.is_empty() => None,
+            Some(s) => Some(s.clone()),
+            None => None,
+        };
+
+        let email = if let Some(email) = email {
+            let parsed: addr::Email = email.as_ref().trim().parse()?;
+            Some(format!("{}", parsed))
+        } else {
+            None
+        };
+
+        Ok(Author { name, email })
+    }
+
+    pub fn name(&self) -> &Option<String> {
         &self.name
     }
-    pub fn email(&self) -> &Email {
+
+    pub fn email(&self) -> &Option<String> {
         &self.email
     }
 }
 
-impl std::fmt::Display for Author {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{} <{}>", self.name.0, self.email.0)
-    }
-}
-
-impl FromStr for Author {
-    type Err = Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let re = Regex::new(r#"(.+)<(.+)>"#)?;
-
-        if let Some(cap) = re.captures(s) {
-            let name = Name::from_str(&cap[1])?;
-            let email = Email::from_str(&cap[2])?;
-            Ok(Author { name, email })
-        } else {
-            Err(Error::ParseError)
+impl fmt::Display for Author {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match (&self.name, &self.email) {
+            (Some(name), Some(email)) => write!(f, "{} <{}>", name, email),
+            (Some(name), None) => write!(f, "{}", name),
+            (None, Some(email)) => write!(f, "<{}>", email),
+            (None, None) => write!(f, ""),
         }
     }
 }
-
-pub mod author_builder;
-pub use author_builder::AuthorBuilder;

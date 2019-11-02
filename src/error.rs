@@ -1,19 +1,27 @@
-use derive_error::*;
+//! A module that defined application errors.
 
-#[derive(Error, Debug)]
+use thiserror::Error;
+
+/// Application error
+#[derive(Debug, Error)]
 pub enum Error {
-    #[error(no_from, non_std)]
-    Other {
-        reason: String,
-    },
-    #[error(no_from, non_std)]
-    ParseError,
-    #[error(no_from, non_std)]
-    InvalidArgumens {
-        reason: String,
-    },
-    IoError(std::io::Error),
-    FromUtf8Error(std::string::FromUtf8Error),
-    RegexError(regex::Error),
-    AddrError(addr::Error),
+    /// Error returned when using "addr".
+    #[error("Addr error: {0}")]
+    AddrError(#[from] addr::Error),
+
+    /// Command execution error.
+    #[error("Command error: {0}")]
+    CommandError(String),
+
+    /// Error returned when using std::string::from_utf8.
+    #[error("From utf8 error: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
+
+    /// The argument passed when executiong the command is invalid.
+    #[error("Invalid arguments: {0}")]
+    InvalidArguments(String),
+
+    /// Error returned when using std::io.
+    #[error("IO error: {0}")]
+    IoError(#[from] std::io::Error),
 }
