@@ -1,6 +1,6 @@
 # git-author
 
-[日本語ドキュメント]()
+[日本語ドキュメント](https://block-cube-lib.github.io/documentation/git-author/)
 
 ## Overview
 - You can get or set user.name and user.email at oece.
