@@ -148,7 +148,7 @@ dependencies = [
 
 [[package]]
 name = "git-author"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "addr 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "clap 2.33.0 (registry+https://github.com/rust-lang/crates.io-index)",
