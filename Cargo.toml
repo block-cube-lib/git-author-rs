@@ -1,9 +1,13 @@
 [package]
 name = "git-author"
-version = "1.0.1"
+version = "2.0.0"
 authors = ["block <block.cube.lib@gmail.com>"]
 edition = "2018"
-description = "Get, set and replace git author information"
+description = """
+- You can get or set user.name and user.email at oece.
+- You can unset user.name and user.email at once.
+- You can replace the author or committer of past commits.
+"""
 documentation = "https://docs.rs/crate/git-author"
 repository = "https://github.com/block-cube-lib/git-author-rs"
 readme = "README.md"
@@ -12,4 +16,5 @@ license = "MIT"
 [dependencies]
 addr = "0.2.0"
 clap = "2.33.0"
+lazy_static = "1.4"
 thiserror = "1"

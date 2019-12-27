@@ -1,40 +1,31 @@
-use clap::{App, Arg, ArgMatches, SubCommand};
+use clap::{crate_description, crate_version, App, Arg, ArgMatches, SubCommand};
 use git_author::{
-    error::Error,
-    git::{self, Author, ConfigFileLocation},
+    error::*,
+    git::{self, Author, ConfigFileLocation, ReplaceFilter, ReplaceTarget},
 };
 use std::error::Error as _;
 
-const OLD_AUTHOR_NAME_KEY: &str = "old author name";
-const OLD_AUTHOR_EMAIL_KEY: &str = "old author email";
-const NEW_AUTHOR_NAME_KEY: &str = "new author name";
-const NEW_AUTHOR_EMAIL_KEY: &str = "new author email";
+const NAME_KEY: &str = "name";
+const EMAIL_KEY: &str = "email";
 
-const ABOUT_APPLICATION_TEXT: &str = r#"
-- You can get or set user.name and user.email at oece.
-- You can replace the author of past commits.
-"#;
-
-const ABOUT_REPLACE_TEXT: &str =
-    "The author or committer replaces the commit author and committer of \
-     `old author name <old author email>` \
-     with `new author name <new author email>`";
-
-fn main() {
+fn main() -> Result<(), Error> {
     let result = command();
-    if let Err(e) = result {
-        println!("{}", e);
-        let mut source = e.source();
-        while let Some(s) = source {
-            println!("{}", s);
-            source = s.source();
+    match result {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            println!("{}", e);
+            let mut source = e.source();
+            while let Some(s) = source {
+                println!("{}", s);
+                source = s.source();
+            }
+            Err(e)
         }
     }
 }
 
 fn command() -> Result<(), Error> {
-    let config_file_locations = vec![ConfigFileLocation::Global, ConfigFileLocation::Local];
-    let config_file_location_name_and_helps: Vec<_> = config_file_locations
+    let config_file_location_name_and_helps: Vec<_> = ConfigFileLocation::VARIANTRS
         .iter()
         .map(|c| (format!("{}", c), format!("use {} config file", c)))
         .collect();
@@ -51,48 +42,134 @@ fn command() -> Result<(), Error> {
         })
         .collect();
 
-    let commiter_args = [
-        Arg::with_name(OLD_AUTHOR_NAME_KEY)
-            .requires(OLD_AUTHOR_EMAIL_KEY)
-            .required(true)
-            .display_order(0),
-        Arg::with_name(OLD_AUTHOR_EMAIL_KEY)
-            .required(true)
-            .display_order(1),
-    ];
-    let author_args = [
-        Arg::with_name(NEW_AUTHOR_NAME_KEY)
-            .requires(NEW_AUTHOR_EMAIL_KEY)
-            .required(false)
-            .display_order(3),
-        Arg::with_name(NEW_AUTHOR_EMAIL_KEY)
-            .required(false)
-            .display_order(4),
-    ];
-
     let get_subcommand = SubCommand::with_name("get")
         .about("get user.name and user.email")
         .usage("git author (get) [FLAGS]")
         .args(&config_file_location_args)
         .display_order(0);
-    let set_subcommand = SubCommand::with_name("set")
-        .about("set user.name and user.email")
+
+    let set_subcommand = {
+        let author_args = [
+            Arg::with_name(NAME_KEY)
+                .requires(EMAIL_KEY)
+                .empty_values(false)
+                .required(true)
+                .display_order(1),
+            Arg::with_name(EMAIL_KEY).required(true).display_order(2),
+        ];
+        SubCommand::with_name("set")
+            .about("set user.name and user.email")
+            .args(&config_file_location_args)
+            .args(&author_args)
+            .display_order(1)
+    };
+
+    let unset_subcommand = SubCommand::with_name("unset")
+        .about("unset user.name and user.email")
+        .usage("git author unset [FLAGS]")
         .args(&config_file_location_args)
-        .args(&author_args)
-        .display_order(1);
-    let replace_subcommand = SubCommand::with_name("replace")
-        .about(ABOUT_REPLACE_TEXT)
-        .display_order(2)
-        .args(&commiter_args)
-        .args(&author_args);
+        .display_order(2);
+
+    let replace_subcommand = {
+        use replace::*;
+
+        let simple_subcommand = {
+            use option::simple::*;
+
+            let args = [
+                Arg::with_name(OLD_NAME_KEY)
+                    .requires(OLD_EMAIL_KEY)
+                    .empty_values(false)
+                    .required(true)
+                    .display_order(1),
+                Arg::with_name(OLD_EMAIL_KEY)
+                    .required(true)
+                    .display_order(2),
+                Arg::with_name(NEW_NAME_KEY)
+                    .requires(NEW_EMAIL_KEY)
+                    .empty_values(false)
+                    .required(false)
+                    .display_order(3),
+                Arg::with_name(NEW_EMAIL_KEY)
+                    .required(false)
+                    .display_order(4),
+            ];
+
+            SubCommand::with_name(NAME)
+                .args(&args)
+                .about(&**option::simple::ABOUT)
+                .display_order(1)
+        };
+
+        let detail_subcommand = {
+            use option::detail::*;
+            let filter_author = Arg::with_name(FILTER_AUTHOR)
+                .long(FILTER_AUTHOR)
+                .value_names(&[&NAME_KEY, &EMAIL_KEY])
+                .empty_values(false)
+                .required_unless(FILTER_COMMITTER)
+                .help(&FILTER_AUTHOR_HELP)
+                .display_order(0);
+            let filter_committer = Arg::with_name(FILTER_COMMITTER)
+                .long(FILTER_COMMITTER)
+                .value_names(&[&NAME_KEY, &EMAIL_KEY])
+                .empty_values(false)
+                .required_unless(FILTER_AUTHOR)
+                .help(&FILTER_COMMITTER_HELP)
+                .display_order(1);
+            let filter_type = Arg::with_name(FILTER_TYPE)
+                .long(FILTER_TYPE)
+                .takes_value(true)
+                .default_value(FILTER_AUTHOR_AND_COMMITTER)
+                .empty_values(false)
+                .help(&FILTER_TYPE_HELP)
+                .display_order(2);
+
+            let replace_author = Arg::with_name(AUTHOR)
+                .long(AUTHOR)
+                .value_names(&[&NAME_KEY, &EMAIL_KEY])
+                .empty_values(false)
+                .help(AUTHOR_HELP)
+                .display_order(3);
+            let replace_committer = Arg::with_name(COMMITTER)
+                .long(COMMITTER)
+                .value_names(&[&NAME_KEY, &EMAIL_KEY])
+                .empty_values(false)
+                .help(COMMITTER_HELP)
+                .display_order(4);
+            let replace_target = Arg::with_name(REPLACE_TARGET)
+                .long(REPLACE_TARGET)
+                .help(&TARGET_HELP)
+                .required(true)
+                .takes_value(true)
+                .empty_values(false)
+                .display_order(5);
+
+            SubCommand::with_name(NAME)
+                .display_order(2)
+                .arg(filter_author)
+                .arg(filter_committer)
+                .arg(replace_author)
+                .arg(replace_committer)
+                .arg(replace_target)
+                .arg(filter_type)
+        };
+
+        SubCommand::with_name("replace")
+            .about(ABOUT)
+            .display_order(3)
+            .subcommand(simple_subcommand)
+            .subcommand(detail_subcommand)
+    };
 
     let app = App::new("git-author")
-        .version("1.0.0")
+        .version(crate_version!())
         .usage("git-author [SUBCOMMAND] [FLAGS]")
-        .about(ABOUT_APPLICATION_TEXT)
+        .about(crate_description!())
         .args(&config_file_location_args)
         .subcommand(get_subcommand)
         .subcommand(set_subcommand)
+        .subcommand(unset_subcommand)
         .subcommand(replace_subcommand);
 
     let matches = app.get_matches();
@@ -101,8 +178,10 @@ fn command() -> Result<(), Error> {
         get_author(&matches)?;
     } else if let Some(ref matches) = matches.subcommand_matches("set") {
         set_author(&matches)?;
+    } else if let Some(ref matches) = matches.subcommand_matches("unset") {
+        unset_author(&matches)?;
     } else if let Some(ref matches) = matches.subcommand_matches("replace") {
-        replace(&matches)?;
+        replace::replace(&matches)?;
     } else {
         // get
         get_author(&matches)?;
@@ -136,69 +215,243 @@ fn get_author(matches: &ArgMatches) -> Result<(), Error> {
 }
 
 fn set_author(matches: &ArgMatches) -> Result<(), Error> {
-    match (
-        matches.value_of(NEW_AUTHOR_NAME_KEY),
-        matches.value_of(NEW_AUTHOR_EMAIL_KEY),
-    ) {
+    match (matches.value_of(NAME_KEY), matches.value_of(EMAIL_KEY)) {
         (Some(name), Some(email)) => {
-            let config_file_location = if let Some(location) = get_config_file_location(&matches) {
-                location
-            } else {
-                ConfigFileLocation::Local
-            };
+            let config_file_location =
+                get_config_file_location(&matches).unwrap_or(ConfigFileLocation::Local);
             let author = Author::new(Some(name), Some(email))?;
-            git::set_author(config_file_location, author)?;
-            println!("set {} author: {} <{}>", config_file_location, name, email);
+            git::set_author(config_file_location, &author)?;
+            println!("set {} author: {}", config_file_location, author);
             Ok(())
         }
-        (name, email) => Err(Error::InvalidArguments(format!(
-            "The following required arguments were not provided:\n{}{}",
-            if name.is_none() {
-                "<author name>\n"
-            } else {
-                ""
-            },
-            if email.is_none() {
-                "<author email>"
-            } else {
-                ""
-            },
-        ))),
+        (None, Some(_)) => Err(AuthorFieldError::NameIsNone.into()),
+        (Some(_), None) => Err(AuthorFieldError::EmailIsNone.into()),
+        (None, None) => Err(AuthorFieldError::NameAndEmailAreNone.into()),
     }
 }
 
-fn replace(matches: &ArgMatches) -> Result<(), Error> {
-    let (old_author, new_author) = match (
-        matches.value_of(OLD_AUTHOR_NAME_KEY),
-        matches.value_of(OLD_AUTHOR_EMAIL_KEY),
-        matches.value_of(NEW_AUTHOR_NAME_KEY),
-        matches.value_of(NEW_AUTHOR_EMAIL_KEY),
-    ) {
-        (
-            Some(old_author_name),
-            Some(old_auhor_email),
-            Some(new_author_name),
-            Some(new_author_email),
-        ) => {
-            let old_author = Author::new(Some(old_author_name), Some(old_auhor_email))?;
-            let new_author = Author::new(Some(new_author_name), Some(new_author_email))?;
-            (old_author, new_author)
-        }
-        (Some(old_author_name), Some(old_author_email), None, None) => {
-            let old_author = Author::new(Some(old_author_name), Some(old_author_email))?;
-            let new_author = git::get_author(None)?;
-            (old_author, new_author)
-        }
-        (_, _, _, _) => {
-            return Err(Error::InvalidArguments(
-                "Arguments has empty parameter.".to_string(),
-            ));
-        }
-    };
-
-    println!("{} -> {}", old_author, new_author);
-    let output = git::replace(old_author, new_author)?;
-    println!("{}", output);
-
+fn unset_author(matches: &ArgMatches) -> Result<(), Error> {
+    let config_file_location = get_config_file_location(&matches);
+    git::unset_author(config_file_location)?;
     Ok(())
+}
+
+mod replace {
+    pub mod option {
+        pub mod detail {
+            use lazy_static::lazy_static;
+
+            pub const NAME: &str = "detail";
+
+            pub const FILTER_TYPE: &str = "filter-type";
+            pub const FILTER_AUTHOR: &str = "filter-author";
+            pub const FILTER_COMMITTER: &str = "filter-committer";
+            pub const FILTER_AUTHOR_OR_COMMITTER: &str = "or";
+            pub const FILTER_AUTHOR_AND_COMMITTER: &str = "and";
+
+            pub const REPLACE_TARGET: &str = "replace-target";
+            pub const REPLACE_TARGET_AUTHOR: &str = "author";
+            pub const REPLACE_TARGET_COMMITTER: &str = "committer";
+            pub const REPLACE_TARGET_AUTHOR_AND_COMMITTER: &str = "author-and-committer";
+
+            pub const AUTHOR: &str = "author";
+            pub const COMMITTER: &str = "committer";
+            pub static AUTHOR_HELP: &str =
+                "author after replacement. \
+                 If not specified, use author which can be obrtained by `git author get`";
+            pub static COMMITTER_HELP: &str =
+                "committer after replacement. \
+                 If not specified, use author which can be obrtained by `git author get`";
+
+            lazy_static! {
+                pub static ref FILTER_AUTHOR_HELP: String = format!(
+                    "filter with author. Required when `{}` is not specified.",
+                    FILTER_COMMITTER
+                );
+                pub static ref FILTER_COMMITTER_HELP: String = format!(
+                    "filter with committer. Required when `{}` is not specified.",
+                    FILTER_AUTHOR
+                );
+                pub static ref FILTER_TYPE_HELP: String = format!(
+                    "You can specify `{and}` or `{or}`. \
+                     Valid only both `{filter_author}` and `{filter_committer}` are specified. \
+                     It is ignored at other times.\n\
+                     The defalut is `{and}`.\n\
+                     If `{and}` is specified, \
+                     commits that match `author` and `committer` are specified, \
+                     and if `{or}` is specified, \
+                     commits that match either `author` or `committer` are included.",
+                    and = FILTER_AUTHOR_AND_COMMITTER,
+                    or = FILTER_AUTHOR_OR_COMMITTER,
+                    filter_author = FILTER_AUTHOR,
+                    filter_committer = FILTER_COMMITTER
+                );
+                pub static ref TARGET_HELP: String = format!(
+                    "Replacement target. You can specify `{}` or`{}` or `{}`.",
+                    REPLACE_TARGET_AUTHOR,
+                    REPLACE_TARGET_COMMITTER,
+                    REPLACE_TARGET_AUTHOR_AND_COMMITTER
+                );
+            }
+        }
+
+        pub mod simple {
+            use lazy_static::lazy_static;
+
+            pub const NAME: &str = "simple";
+            pub const OLD_NAME_KEY: &str = "old-name";
+            pub const OLD_EMAIL_KEY: &str = "old-email";
+            pub const NEW_NAME_KEY: &str = "new-name";
+            pub const NEW_EMAIL_KEY: &str = "new-email";
+
+            lazy_static! {
+                pub static ref ABOUT: String = format!(
+                    "Replace the Author or Committer's `{}` with `{}` and \
+                     `{}` with `{}` in the past commit.",
+                    OLD_NAME_KEY,
+                    OLD_EMAIL_KEY,
+                    NEW_NAME_KEY,
+                    NEW_EMAIL_KEY
+                );
+            }
+        }
+    }
+
+    pub const ABOUT: &str = "The author or committer replaces the commit author and committer of \
+                             `old author name <old author email>` \
+                             with `new author name <new author email>`";
+
+    use super::*;
+
+    pub fn replace(matches: &ArgMatches) -> Result<(), Error> {
+        if let Some(ref matches) = matches.subcommand_matches(option::simple::NAME) {
+            replace_simple(&matches)?;
+        } else if let Some(ref matches) = matches.subcommand_matches(option::detail::NAME) {
+            replace_detail(&matches)?;
+        }
+        Ok(())
+    }
+
+    fn replace_detail(matches: &ArgMatches) -> Result<(), Error> {
+        let filter = parse_filter(&matches)?;
+        match &filter {
+            ReplaceFilter::AuthorOnly(author) => println!("filter author: {}", author),
+            ReplaceFilter::CommitterOnly(committer) => println!("filter committer: {}", committer),
+            ReplaceFilter::AuthorOrCommitter { author, committer } => println!(
+                "filter author or committer\n\
+                 author   : {}\n\
+                 committer: {}",
+                author, committer
+            ),
+            ReplaceFilter::AuthorAndCommitter { author, committer } => println!(
+                "filter author and committer\n\
+                 author   : {}\n\
+                 committer: {}",
+                author, committer
+            ),
+        };
+
+        let target = parse_target(&matches)?;
+        match &target {
+            ReplaceTarget::Author { new_author } => println!("new author: {}", new_author),
+            ReplaceTarget::Committer { new_committer } => {
+                println!("new committer: {}", new_committer)
+            }
+            ReplaceTarget::AuthorAndCommitter {
+                new_author,
+                new_committer,
+            } => println!(
+                "new author   : {}\n\
+                 new committer: {}",
+                new_author, new_committer
+            ),
+        }
+
+        git::replace(filter, target)?;
+
+        Ok(())
+    }
+
+    fn replace_simple(matches: &ArgMatches) -> Result<(), Error> {
+        use option::simple::*;
+
+        let old_name = matches.value_of(OLD_NAME_KEY);
+        let old_email = matches.value_of(OLD_EMAIL_KEY);
+        let old_author = Author::new(old_name, old_email)?;
+
+        let new_author = match (
+            matches.value_of(NEW_NAME_KEY),
+            matches.value_of(NEW_EMAIL_KEY),
+        ) {
+            (None, None) => git::get_author(None)?,
+            (name, email) => Author::new(name, email)?,
+        };
+
+        git::replace_simple(old_author, new_author).map_err(|e| e.into())
+    }
+
+    // Option<Values> to Result<Option<Author>, Error>
+    fn values_to_author(values: Option<clap::Values>) -> Result<Option<Author>, Error> {
+        if let Some(mut values) = values {
+            let author = Author::new(values.next(), values.next())?;
+            Ok(Some(author))
+        } else {
+            Ok(None)
+        }
+    }
+
+    fn parse_filter(matches: &ArgMatches) -> Result<ReplaceFilter, Error> {
+        use option::detail::*;
+
+        let author = values_to_author(matches.values_of(FILTER_AUTHOR))?;
+        let committer = values_to_author(matches.values_of(FILTER_COMMITTER))?;
+        let filter_type = matches.value_of(FILTER_TYPE);
+        let filter = match (author, committer, filter_type) {
+            (Some(author), None, _) => ReplaceFilter::AuthorOnly(author),
+            (None, Some(committer), _) => ReplaceFilter::CommitterOnly(committer),
+            (Some(author), Some(committer), Some(FILTER_AUTHOR_AND_COMMITTER)) => {
+                ReplaceFilter::AuthorAndCommitter { author, committer }
+            }
+            (Some(author), Some(committer), Some(FILTER_AUTHOR_OR_COMMITTER)) => {
+                ReplaceFilter::AuthorOrCommitter { author, committer }
+            }
+            (_, _, _) => {
+                return Err(InvalidArguments(format!(
+                    "The only value that can be specified for filter-type is `{}` or `{}`.",
+                    FILTER_AUTHOR_AND_COMMITTER, FILTER_AUTHOR_OR_COMMITTER,
+                ))
+                .into())
+            }
+        };
+        Ok(filter)
+    }
+
+    fn parse_target(matches: &ArgMatches) -> Result<ReplaceTarget, Error> {
+        use option::detail::*;
+
+        let author = values_to_author(matches.values_of(AUTHOR))?.unwrap_or(git::get_author(None)?);
+        let committer =
+            values_to_author(matches.values_of(COMMITTER))?.unwrap_or(git::get_author(None)?);
+        let replace_target = matches.value_of(REPLACE_TARGET);
+        let target = match replace_target {
+            Some(REPLACE_TARGET_AUTHOR) => ReplaceTarget::Author { new_author: author },
+            Some(REPLACE_TARGET_COMMITTER) => ReplaceTarget::Committer {
+                new_committer: committer,
+            },
+            Some(REPLACE_TARGET_AUTHOR_AND_COMMITTER) => ReplaceTarget::AuthorAndCommitter {
+                new_author: author,
+                new_committer: committer,
+            },
+            _ => {
+                return Err(InvalidArguments(format!(
+                    "The only value that can be specified for filter-type is `{}` or `{}` or `{}`.",
+                    REPLACE_TARGET_AUTHOR,
+                    REPLACE_TARGET_COMMITTER,
+                    REPLACE_TARGET_AUTHOR_AND_COMMITTER
+                ))
+                .into())
+            }
+        };
+        Ok(target)
+    }
 }

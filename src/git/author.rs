@@ -1,4 +1,3 @@
-use crate::error::Error;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -8,7 +7,7 @@ pub struct Author {
 }
 
 impl Author {
-    pub fn new<S1, S2>(name: Option<S1>, email: Option<S2>) -> Result<Self, Error>
+    pub fn new<S1, S2>(name: Option<S1>, email: Option<S2>) -> Result<Self, addr::Error>
     where
         S1: AsRef<str>,
         S2: AsRef<str>,
@@ -36,6 +35,10 @@ impl Author {
 
     pub fn email(&self) -> &Option<String> {
         &self.email
+    }
+
+    pub fn has_none_field(&self) -> bool {
+        self.name().is_none() || self.email().is_none()
     }
 }
 
