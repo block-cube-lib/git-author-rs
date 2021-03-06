@@ -1,3 +1,4 @@
+use addr::email;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,8 +21,8 @@ impl Author {
         };
 
         let email = if let Some(email) = email {
-            let parsed: addr::Email = email.as_ref().trim().parse()?;
-            Some(format!("{}", parsed))
+            let parsed = email::Address::parse(email.as_ref().trim())?;
+            Some(parsed.to_string())
         } else {
             None
         };
