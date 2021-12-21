@@ -14,7 +14,7 @@ readme = "README.md"
 license = "MIT"
 
 [dependencies]
-addr = "0.2.0"
+addr = "0.9.1"
 clap = "2.33.0"
 lazy_static = "1.4"
 thiserror = "1"
