@@ -3,11 +3,34 @@
 use crate::git::Author;
 use thiserror::Error;
 
+#[derive(Debug, Error)]
+pub struct InvalidEmailAddressError {
+    address: String,
+}
+
+impl std::fmt::Display for InvalidEmailAddressError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Invalid email address error: {}", self.address)
+    }
+}
+
+impl InvalidEmailAddressError {
+    pub fn new(address: &str) -> Self {
+        Self {
+            address: address.into(),
+        }
+    }
+
+    pub fn address(&self) -> &String {
+        &self.address
+    }
+}
+
 /// Application error
 #[derive(Debug, Error)]
 pub enum Error {
-    #[error("addr error: {0}")]
-    Addr(#[from] addr::Error),
+    #[error("invalid email address error: {0}")]
+    InvalidEmailAddress(#[from] InvalidEmailAddressError),
 
     #[error("Invalid arguments: {0}")]
     InvalidArguments(#[from] InvalidArguments),
@@ -111,9 +134,9 @@ pub enum GetError {
     #[error("output error: {0}")]
     Output(#[from] OutputError),
 
-    /// Error returned when using "addr".
-    #[error("Addr error: {0}")]
-    Addr(#[from] addr::Error),
+    /// Error returned when parse email address.
+    #[error("invalid email address error: {0}")]
+    InvalidEmailAddress(#[from] InvalidEmailAddressError),
 }
 
 #[derive(Debug, Error)]

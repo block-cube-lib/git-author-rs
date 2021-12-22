@@ -1,14 +1,16 @@
+use anyhow::Result;
 use clap::{crate_description, crate_version, App, Arg, ArgMatches, SubCommand};
 use git_author::{
     error::*,
     git::{self, Author, ConfigFileLocation, ReplaceFilter, ReplaceTarget},
 };
-use std::error::Error as _;
 
 const NAME_KEY: &str = "name";
 const EMAIL_KEY: &str = "email";
 
-fn main() -> Result<(), Error> {
+fn main() -> Result<()> {
+    replace::option::init()?;
+
     let result = command();
     match result {
         Ok(_) => Ok(()),
@@ -19,12 +21,12 @@ fn main() -> Result<(), Error> {
                 println!("{}", s);
                 source = s.source();
             }
-            Err(e)
+            Err(e.into())
         }
     }
 }
 
-fn command() -> Result<(), Error> {
+fn command() -> Result<()> {
     let config_file_location_name_and_helps: Vec<_> = ConfigFileLocation::VARIANTRS
         .iter()
         .map(|c| (format!("{}", c), format!("use {} config file", c)))
@@ -97,7 +99,7 @@ fn command() -> Result<(), Error> {
 
             SubCommand::with_name(NAME)
                 .args(&args)
-                .about(&**option::simple::ABOUT)
+                .about(&**option::simple::ABOUT.get().unwrap())
                 .display_order(1)
         };
 
@@ -108,21 +110,21 @@ fn command() -> Result<(), Error> {
                 .value_names(&[&NAME_KEY, &EMAIL_KEY])
                 .empty_values(false)
                 .required_unless(FILTER_COMMITTER)
-                .help(&FILTER_AUTHOR_HELP)
+                .help(&FILTER_AUTHOR_HELP.get().unwrap())
                 .display_order(0);
             let filter_committer = Arg::with_name(FILTER_COMMITTER)
                 .long(FILTER_COMMITTER)
                 .value_names(&[&NAME_KEY, &EMAIL_KEY])
                 .empty_values(false)
                 .required_unless(FILTER_AUTHOR)
-                .help(&FILTER_COMMITTER_HELP)
+                .help(&FILTER_COMMITTER_HELP.get().unwrap())
                 .display_order(1);
             let filter_type = Arg::with_name(FILTER_TYPE)
                 .long(FILTER_TYPE)
                 .takes_value(true)
                 .default_value(FILTER_AUTHOR_AND_COMMITTER)
                 .empty_values(false)
-                .help(&FILTER_TYPE_HELP)
+                .help(&FILTER_TYPE_HELP.get().unwrap())
                 .display_order(2);
 
             let replace_author = Arg::with_name(AUTHOR)
@@ -139,7 +141,7 @@ fn command() -> Result<(), Error> {
                 .display_order(4);
             let replace_target = Arg::with_name(REPLACE_TARGET)
                 .long(REPLACE_TARGET)
-                .help(&TARGET_HELP)
+                .help(&TARGET_HELP.get().unwrap())
                 .required(true)
                 .takes_value(true)
                 .empty_values(false)
@@ -238,9 +240,15 @@ fn unset_author(matches: &ArgMatches) -> Result<(), Error> {
 
 mod replace {
     pub mod option {
-        pub mod detail {
-            use lazy_static::lazy_static;
+        pub fn init() -> anyhow::Result<()> {
+            detail::init()?;
+            simple::init()?;
 
+            Ok(())
+        }
+
+        pub mod detail {
+            use once_cell::sync::OnceCell;
             pub const NAME: &str = "detail";
 
             pub const FILTER_TYPE: &str = "filter-type";
@@ -256,23 +264,27 @@ mod replace {
 
             pub const AUTHOR: &str = "author";
             pub const COMMITTER: &str = "committer";
-            pub static AUTHOR_HELP: &str =
-                "author after replacement. \
+            pub static AUTHOR_HELP: &str = "author after replacement. \
                  If not specified, use author which can be obrtained by `git author get`";
-            pub static COMMITTER_HELP: &str =
-                "committer after replacement. \
+            pub static COMMITTER_HELP: &str = "committer after replacement. \
                  If not specified, use author which can be obrtained by `git author get`";
 
-            lazy_static! {
-                pub static ref FILTER_AUTHOR_HELP: String = format!(
+            pub static FILTER_AUTHOR_HELP: OnceCell<String> = OnceCell::new();
+            pub static FILTER_COMMITTER_HELP: OnceCell<String> = OnceCell::new();
+            pub static FILTER_TYPE_HELP: OnceCell<String> = OnceCell::new();
+            pub static TARGET_HELP: OnceCell<String> = OnceCell::new();
+
+            pub fn init() -> anyhow::Result<()> {
+                use anyhow::anyhow;
+                FILTER_AUTHOR_HELP.set(format!(
                     "filter with author. Required when `{}` is not specified.",
                     FILTER_COMMITTER
-                );
-                pub static ref FILTER_COMMITTER_HELP: String = format!(
+                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+                FILTER_COMMITTER_HELP.set(format!(
                     "filter with committer. Required when `{}` is not specified.",
                     FILTER_AUTHOR
-                );
-                pub static ref FILTER_TYPE_HELP: String = format!(
+                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+                FILTER_TYPE_HELP.set(format!(
                     "You can specify `{and}` or `{or}`. \
                      Valid only both `{filter_author}` and `{filter_committer}` are specified. \
                      It is ignored at other times.\n\
@@ -285,18 +297,21 @@ mod replace {
                     or = FILTER_AUTHOR_OR_COMMITTER,
                     filter_author = FILTER_AUTHOR,
                     filter_committer = FILTER_COMMITTER
-                );
-                pub static ref TARGET_HELP: String = format!(
+                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+                TARGET_HELP.set(format!(
                     "Replacement target. You can specify `{}` or`{}` or `{}`.",
                     REPLACE_TARGET_AUTHOR,
                     REPLACE_TARGET_COMMITTER,
                     REPLACE_TARGET_AUTHOR_AND_COMMITTER
-                );
+                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+
+                Ok(())
             }
         }
 
         pub mod simple {
-            use lazy_static::lazy_static;
+            use anyhow::anyhow;
+            use once_cell::sync::OnceCell;
 
             pub const NAME: &str = "simple";
             pub const OLD_NAME_KEY: &str = "old-name";
@@ -304,15 +319,16 @@ mod replace {
             pub const NEW_NAME_KEY: &str = "new-name";
             pub const NEW_EMAIL_KEY: &str = "new-email";
 
-            lazy_static! {
-                pub static ref ABOUT: String = format!(
+            pub static ABOUT: OnceCell<String> = OnceCell::new();
+
+            pub fn init() -> anyhow::Result<()> {
+                ABOUT.set(format!(
                     "Replace the Author or Committer's `{}` with `{}` and \
                      `{}` with `{}` in the past commit.",
-                    OLD_NAME_KEY,
-                    OLD_EMAIL_KEY,
-                    NEW_NAME_KEY,
-                    NEW_EMAIL_KEY
-                );
+                    OLD_NAME_KEY, OLD_EMAIL_KEY, NEW_NAME_KEY, NEW_EMAIL_KEY
+                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+
+                Ok(())
             }
         }
     }
@@ -323,7 +339,7 @@ mod replace {
 
     use super::*;
 
-    pub fn replace(matches: &ArgMatches) -> Result<(), Error> {
+    pub fn replace(matches: &ArgMatches) -> Result<()> {
         if let Some(ref matches) = matches.subcommand_matches(option::simple::NAME) {
             replace_simple(&matches)?;
         } else if let Some(ref matches) = matches.subcommand_matches(option::detail::NAME) {
@@ -332,7 +348,7 @@ mod replace {
         Ok(())
     }
 
-    fn replace_detail(matches: &ArgMatches) -> Result<(), Error> {
+    fn replace_detail(matches: &ArgMatches) -> Result<()> {
         let filter = parse_filter(&matches)?;
         match &filter {
             ReplaceFilter::AuthorOnly(author) => println!("filter author: {}", author),
@@ -372,7 +388,7 @@ mod replace {
         Ok(())
     }
 
-    fn replace_simple(matches: &ArgMatches) -> Result<(), Error> {
+    fn replace_simple(matches: &ArgMatches) -> Result<()> {
         use option::simple::*;
 
         let old_name = matches.value_of(OLD_NAME_KEY);
@@ -391,7 +407,7 @@ mod replace {
     }
 
     // Option<Values> to Result<Option<Author>, Error>
-    fn values_to_author(values: Option<clap::Values>) -> Result<Option<Author>, Error> {
+    fn values_to_author(values: Option<clap::Values>) -> Result<Option<Author>> {
         if let Some(mut values) = values {
             let author = Author::new(values.next(), values.next())?;
             Ok(Some(author))
@@ -400,7 +416,7 @@ mod replace {
         }
     }
 
-    fn parse_filter(matches: &ArgMatches) -> Result<ReplaceFilter, Error> {
+    fn parse_filter(matches: &ArgMatches) -> Result<ReplaceFilter> {
         use option::detail::*;
 
         let author = values_to_author(matches.values_of(FILTER_AUTHOR))?;
@@ -426,7 +442,7 @@ mod replace {
         Ok(filter)
     }
 
-    fn parse_target(matches: &ArgMatches) -> Result<ReplaceTarget, Error> {
+    fn parse_target(matches: &ArgMatches) -> Result<ReplaceTarget> {
         use option::detail::*;
 
         let author = values_to_author(matches.values_of(AUTHOR))?.unwrap_or(git::get_author(None)?);

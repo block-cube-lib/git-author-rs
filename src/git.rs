@@ -54,7 +54,7 @@ fn get_git_user_param(
 pub fn get_author(location: Option<ConfigFileLocation>) -> Result<Author, GetError> {
     let name = get_git_user_param(location, UserParameter::Name)?;
     let email = get_git_user_param(location, UserParameter::Email)?;
-    let author = Author::new(name, email)?;
+    let author = Author::new(name.as_deref(), email.as_deref())?;
     Ok(author)
 }
 
@@ -85,7 +85,7 @@ pub fn set_author(location: ConfigFileLocation, author: &Author) -> Result<(), S
     match (author.name(), author.email()) {
         (Some(name), Some(email)) => {
             set_git_user_param(location, UserParameter::Name, name)?;
-            set_git_user_param(location, UserParameter::Email, email)?;
+            set_git_user_param(location, UserParameter::Email, &format!("{}", email))?;
             Ok(())
         }
         _ => Err(AuthorFieldError::new(&author).unwrap().into()),
