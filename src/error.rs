@@ -87,9 +87,7 @@ pub enum AuthorFieldError {
 impl AuthorFieldError {
     pub fn new(author: &Author) -> Result<Self, InvalidArguments> {
         match (author.name(), author.email()) {
-            (Some(_name), Some(_email)) => Err(InvalidArguments(
-                "author has no None parameter.".to_string(),
-            )),
+            (Some(_name), Some(_email)) => unreachable!(),
             (None, None) => Ok(AuthorFieldError::NameAndEmailAreNone),
             (None, _) => Ok(AuthorFieldError::NameIsNone),
             (_, None) => Ok(AuthorFieldError::EmailIsNone),
