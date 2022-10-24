@@ -6,7 +6,7 @@ mod replace_filter;
 mod replace_target;
 mod user_parameter;
 
-use crate::error::*;
+use crate::{error::*, EmailAddress};
 pub use author::Author;
 pub use config_file_location::ConfigFileLocation;
 pub use replace_filter::ReplaceFilter;
@@ -54,8 +54,12 @@ fn get_git_user_param(
 pub fn get_author(location: Option<ConfigFileLocation>) -> Result<Author, GetError> {
     let name = get_git_user_param(location, UserParameter::Name)?;
     let email = get_git_user_param(location, UserParameter::Email)?;
-    let author = Author::new(name.as_deref(), email.as_deref())?;
-    Ok(author)
+    let email: Option<EmailAddress> = if let Some(email) = email {
+        Some(email.parse()?)
+    } else {
+        None
+    };
+    Ok(Author::new(name.as_deref(), email))
 }
 
 /// set user.name or user.email
@@ -127,6 +131,7 @@ pub fn unset_author(location: Option<ConfigFileLocation>) -> Result<(), UnsetErr
     Ok(())
 }
 
+/*
 /// Replaces committer and author from past commits in the current branch.
 /// options
 /// --author-only
@@ -198,3 +203,4 @@ fn replace_impl(condition_arg: &str) -> Result<(), ReplaceError> {
 
     Ok(())
 }
+*/

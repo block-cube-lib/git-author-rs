@@ -18,7 +18,7 @@ impl std::fmt::Display for ConfigFileLocation {
 }
 
 impl ConfigFileLocation {
-    pub const VARIANTRS: [Self; 2] = [Self::Global, Self::Local];
+    pub const VARIANTS: [Self; 2] = [Self::Global, Self::Local];
 
     pub fn to_arg(self) -> String {
         format!("--{}", self)

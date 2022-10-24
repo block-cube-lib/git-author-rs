@@ -5,12 +5,21 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub struct InvalidEmailAddressError {
-    address: String,
+    pub address: String,
 }
 
 impl std::fmt::Display for InvalidEmailAddressError {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "Invalid email address error: {}", self.address)
+    }
+}
+
+#[derive(Debug, Error)]
+pub struct ReplaceTargetParseError;
+
+impl std::fmt::Display for ReplaceTargetParseError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}", *self)
     }
 }
 

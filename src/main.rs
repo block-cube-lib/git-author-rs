@@ -1,5 +1,5 @@
-use anyhow::Result;
-use clap::{crate_description, crate_version, App, Arg, ArgMatches, SubCommand};
+use anyhow::{anyhow, Result};
+use clap::Parser;
 use git_author::{
     error::*,
     git::{self, Author, ConfigFileLocation, ReplaceFilter, ReplaceTarget},
@@ -8,24 +8,30 @@ use git_author::{
 const NAME_KEY: &str = "name";
 const EMAIL_KEY: &str = "email";
 
-fn main() -> Result<()> {
-    replace::option::init()?;
 
-    let result = command();
-    match result {
-        Ok(_) => Ok(()),
-        Err(e) => {
-            println!("{}", e);
-            let mut source = e.source();
-            while let Some(s) = source {
-                println!("{}", s);
-                source = s.source();
-            }
-            Err(e.into())
-        }
-    }
+fn main() -> Result<()> {
+    let git_author = git_author::command::GitAuthor::parse();
+    git_author.execute_subcommand()?;
+
+    //replace::option::init()?;
+
+    //let result = command();
+    //match result {
+    //    Ok(_) => Ok(()),
+    //    Err(e) => {
+    //        println!("{}", e);
+    //        let mut source = e.source();
+    //        while let Some(s) = source {
+    //            println!("{}", s);
+    //            source = s.source();
+    //        }
+    //        Err(e.into())
+    //    }
+    //}
+    Ok(())
 }
 
+/*
 fn command() -> Result<()> {
     let config_file_location_name_and_helps: Vec<_> = ConfigFileLocation::VARIANTRS
         .iter()
@@ -72,6 +78,7 @@ fn command() -> Result<()> {
         .args(&config_file_location_args)
         .display_order(2);
 
+    // git author replace
     let replace_subcommand = {
         use replace::*;
 
@@ -203,35 +210,6 @@ fn get_config_file_location(matches: &ArgMatches) -> Option<ConfigFileLocation> 
     }
 }
 
-/// display author
-fn get_author(matches: &ArgMatches) -> Result<(), Error> {
-    let config_file_location = get_config_file_location(&matches);
-    let author = git::get_author(config_file_location)?;
-    match (author.name(), author.email()) {
-        (Some(name), Some(email)) => println!("{} <{}>", name, email),
-        (Some(name), None) => println!("{} (email is empty)", name),
-        (None, Some(email)) => println!("<{}> (name is empty)", email),
-        (None, None) => println!("name and email are empty"),
-    };
-    Ok(())
-}
-
-fn set_author(matches: &ArgMatches) -> Result<(), Error> {
-    match (matches.value_of(NAME_KEY), matches.value_of(EMAIL_KEY)) {
-        (Some(name), Some(email)) => {
-            let config_file_location =
-                get_config_file_location(&matches).unwrap_or(ConfigFileLocation::Local);
-            let author = Author::new(Some(name), Some(email))?;
-            git::set_author(config_file_location, &author)?;
-            println!("set {} author: {}", config_file_location, author);
-            Ok(())
-        }
-        (None, Some(_)) => Err(AuthorFieldError::NameIsNone.into()),
-        (Some(_), None) => Err(AuthorFieldError::EmailIsNone.into()),
-        (None, None) => Err(AuthorFieldError::NameAndEmailAreNone.into()),
-    }
-}
-
 fn unset_author(matches: &ArgMatches) -> Result<(), Error> {
     let config_file_location = get_config_file_location(&matches);
     git::unset_author(config_file_location)?;
@@ -276,16 +254,21 @@ mod replace {
 
             pub fn init() -> anyhow::Result<()> {
                 use anyhow::anyhow;
-                FILTER_AUTHOR_HELP.set(format!(
-                    "filter with author. Required when `{}` is not specified.",
-                    FILTER_COMMITTER
-                )).map_err(|e| anyhow!("set is not success: {}", e))?;
-                FILTER_COMMITTER_HELP.set(format!(
-                    "filter with committer. Required when `{}` is not specified.",
-                    FILTER_AUTHOR
-                )).map_err(|e| anyhow!("set is not success: {}", e))?;
-                FILTER_TYPE_HELP.set(format!(
-                    "You can specify `{and}` or `{or}`. \
+                FILTER_AUTHOR_HELP
+                    .set(format!(
+                        "filter with author. Required when `{}` is not specified.",
+                        FILTER_COMMITTER
+                    ))
+                    .map_err(|e| anyhow!("set is not success: {}", e))?;
+                FILTER_COMMITTER_HELP
+                    .set(format!(
+                        "filter with committer. Required when `{}` is not specified.",
+                        FILTER_AUTHOR
+                    ))
+                    .map_err(|e| anyhow!("set is not success: {}", e))?;
+                FILTER_TYPE_HELP
+                    .set(format!(
+                        "You can specify `{and}` or `{or}`. \
                      Valid only both `{filter_author}` and `{filter_committer}` are specified. \
                      It is ignored at other times.\n\
                      The defalut is `{and}`.\n\
@@ -293,17 +276,20 @@ mod replace {
                      commits that match `author` and `committer` are specified, \
                      and if `{or}` is specified, \
                      commits that match either `author` or `committer` are included.",
-                    and = FILTER_AUTHOR_AND_COMMITTER,
-                    or = FILTER_AUTHOR_OR_COMMITTER,
-                    filter_author = FILTER_AUTHOR,
-                    filter_committer = FILTER_COMMITTER
-                )).map_err(|e| anyhow!("set is not success: {}", e))?;
-                TARGET_HELP.set(format!(
-                    "Replacement target. You can specify `{}` or`{}` or `{}`.",
-                    REPLACE_TARGET_AUTHOR,
-                    REPLACE_TARGET_COMMITTER,
-                    REPLACE_TARGET_AUTHOR_AND_COMMITTER
-                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+                        and = FILTER_AUTHOR_AND_COMMITTER,
+                        or = FILTER_AUTHOR_OR_COMMITTER,
+                        filter_author = FILTER_AUTHOR,
+                        filter_committer = FILTER_COMMITTER
+                    ))
+                    .map_err(|e| anyhow!("set is not success: {}", e))?;
+                TARGET_HELP
+                    .set(format!(
+                        "Replacement target. You can specify `{}` or`{}` or `{}`.",
+                        REPLACE_TARGET_AUTHOR,
+                        REPLACE_TARGET_COMMITTER,
+                        REPLACE_TARGET_AUTHOR_AND_COMMITTER
+                    ))
+                    .map_err(|e| anyhow!("set is not success: {}", e))?;
 
                 Ok(())
             }
@@ -322,11 +308,13 @@ mod replace {
             pub static ABOUT: OnceCell<String> = OnceCell::new();
 
             pub fn init() -> anyhow::Result<()> {
-                ABOUT.set(format!(
-                    "Replace the Author or Committer's `{}` with `{}` and \
+                ABOUT
+                    .set(format!(
+                        "Replace the Author or Committer's `{}` with `{}` and \
                      `{}` with `{}` in the past commit.",
-                    OLD_NAME_KEY, OLD_EMAIL_KEY, NEW_NAME_KEY, NEW_EMAIL_KEY
-                )).map_err(|e| anyhow!("set is not success: {}", e))?;
+                        OLD_NAME_KEY, OLD_EMAIL_KEY, NEW_NAME_KEY, NEW_EMAIL_KEY
+                    ))
+                    .map_err(|e| anyhow!("set is not success: {}", e))?;
 
                 Ok(())
             }
@@ -471,3 +459,4 @@ mod replace {
         Ok(target)
     }
 }
+*/

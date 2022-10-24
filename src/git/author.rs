@@ -1,4 +1,4 @@
-use email_address_parser::EmailAddress;
+use crate::EmailAddress;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -8,23 +8,14 @@ pub struct Author {
 }
 
 impl Author {
-    pub fn new(name: Option<&str>, email: Option<&str>) -> Result<Self, crate::error::InvalidEmailAddressError>
-    {
+    pub fn new(name: Option<&str>, email: Option<EmailAddress>) -> Self {
         let v = name.map(|s| s.trim().to_string());
         let name = match &v {
             Some(s) if s.is_empty() => None,
             Some(s) => Some(s.to_string()),
             None => None,
         };
-
-        match email {
-            Some(email) if EmailAddress::is_valid(email, None) => Ok(Author {
-                name,
-                email: EmailAddress::parse(email, None),
-            }),
-            Some(email) => Err(crate::error::InvalidEmailAddressError::new(email)),
-            None => Ok(Author { name, email: None }),
-        }
+        Author { name, email }
     }
 
     pub fn name(&self) -> &Option<String> {
